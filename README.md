@@ -1,4 +1,4 @@
-# AnycubicSlicer AppImage Builder
+# AnycubicSlicer AppImage Build Script
 
 This script builds an AppImage package for AnycubicSlicerNext from the Debian package provided by Anycubic.
 
