@@ -207,6 +207,38 @@ if [ -f "$DESKTOP" ]; then
   echo "Copied desktop file to $APPDIR/AnycubicSlicer.desktop"
 fi
 
+# Create AppStream metadata for GearLever version detection
+echo "Creating AppStream metadata for version detection..."
+mkdir -p "$APPDIR/share/metainfo"
+APPSTREAM_FILE="$APPDIR/share/metainfo/AnycubicSlicer.appdata.xml"
+cat > "$APPSTREAM_FILE" <<APPSTREAM_EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>AnycubicSlicer</id>
+  <name>AnycubicSlicer</name>
+  <summary>3D Printing Software</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0</project_license>
+  <developer_name>Anycubic</developer_name>
+  <description>
+    <p>AnycubicSlicer is a complete 3D printing solution for Anycubic 3D printers.</p>
+  </description>
+  <launchable type="desktop-id">AnycubicSlicer.desktop</launchable>
+  <releases>
+    <release version="$VERSION" date="$(date +%Y-%m-%d)"/>
+  </releases>
+  <categories>
+    <category>Graphics</category>
+    <category>Engineering</category>
+  </categories>
+</component>
+APPSTREAM_EOF
+echo "Created AppStream metadata with version: $VERSION"
+
+# GearLever also looks for metadata at the root of the AppImage
+cp "$APPSTREAM_FILE" "$APPDIR/AnycubicSlicer.appdata.xml"
+echo "Copied AppStream metadata to AppDir root for GearLever"
+
 echo "Creating AppRun launcher..."
 cat > "$APPDIR/AppRun" <<'EOF'
 #!/bin/bash
@@ -262,6 +294,12 @@ fi
 EOF
 chmod +x "$APPDIR/AppRun"
 
+# Create VERSION file at AppDir root for GearLever
+if [ "$VERSION" != "unknown" ]; then
+  echo "$VERSION" > "$APPDIR/VERSION"
+  echo "Created VERSION file with: $VERSION"
+fi
+
 APPIMAGETOOL="$WORKDIR/appimagetool-x86_64.AppImage"
 if [ ! -x "$APPIMAGETOOL" ]; then
   echo "Downloading appimagetool..."
@@ -270,7 +308,9 @@ if [ ! -x "$APPIMAGETOOL" ]; then
 fi
 
 echo "Running appimagetool to build AppImage..."
-"$APPIMAGETOOL" "$APPDIR"
+# Set VERSION environment variable for appimagetool
+export VERSION="$VERSION"
+"$APPIMAGETOOL" --no-appstream "$APPDIR"
 
 # Rename the AppImage to include version number
 if [ "$VERSION" != "unknown" ]; then
