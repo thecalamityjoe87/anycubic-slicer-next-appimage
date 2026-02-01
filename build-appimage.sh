@@ -285,11 +285,18 @@ export WEBKIT_DISABLE_DMABUF_RENDERER=1
 export WEBKIT_FORCE_COMPOSITING_MODE=1
 export WEBKIT_DISABLE_COMPOSITING_MODE=1
 
-# Execute using the bundled linker if available, otherwise execute directly
-if [ -f "$DIR/runtime/ld-linux-x86-64.so.2" ]; then
-  exec "$DIR/runtime/ld-linux-x86-64.so.2" --library-path "$LD_LIBRARY_PATH" "$DIR/bin/AnycubicSlicerNext" "$@"
-else
+# Detect Box64 emulation (check for BOX64 env var or if running under box64)
+if [ -n "$BOX64_PATH" ] || [ -n "$BOX64_LOG" ] || grep -qi box64 /proc/self/maps 2>/dev/null; then
+  # Running under Box64 - do NOT use bundled linker, let Box64 handle it
+  # Box64 needs direct execution to properly intercept library loading
   exec "$DIR/bin/AnycubicSlicerNext" "$@"
+else
+  # Native x86_64 execution - use bundled linker if available
+  if [ -f "$DIR/runtime/ld-linux-x86-64.so.2" ]; then
+    exec "$DIR/runtime/ld-linux-x86-64.so.2" --library-path "$LD_LIBRARY_PATH" "$DIR/bin/AnycubicSlicerNext" "$@"
+  else
+    exec "$DIR/bin/AnycubicSlicerNext" "$@"
+  fi
 fi
 EOF
 chmod +x "$APPDIR/AppRun"
