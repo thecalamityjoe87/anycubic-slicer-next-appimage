@@ -7,6 +7,23 @@ DOWNLOAD_DEB=0
 REGION="global"
 EXTRACT_DIR="$WORKDIR/extracted"
 APPDIR="$WORKDIR/AnycubicSlicer.AppDir"
+HOST_ARCH="$(uname -m)"
+APPIMAGETOOL_ARCH="${APPIMAGETOOL_ARCH:-}"
+
+if [ -z "$APPIMAGETOOL_ARCH" ]; then
+  case "$HOST_ARCH" in
+    x86_64|amd64)
+      APPIMAGETOOL_ARCH="x86_64"
+      ;;
+    aarch64|arm64)
+      APPIMAGETOOL_ARCH="aarch64"
+      ;;
+    *)
+      echo "Warning: Unsupported host arch '$HOST_ARCH'. Falling back to x86_64 appimagetool."
+      APPIMAGETOOL_ARCH="x86_64"
+      ;;
+  esac
+fi
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -307,16 +324,21 @@ if [ "$VERSION" != "unknown" ]; then
   echo "Created VERSION file with: $VERSION"
 fi
 
-APPIMAGETOOL="$WORKDIR/appimagetool-x86_64.AppImage"
+APPIMAGETOOL="$WORKDIR/appimagetool-${APPIMAGETOOL_ARCH}.AppImage"
+APPIMAGETOOL_URL="https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-${APPIMAGETOOL_ARCH}.AppImage"
 if [ ! -x "$APPIMAGETOOL" ]; then
-  echo "Downloading appimagetool..."
-  curl -L -o "$APPIMAGETOOL" "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
+  echo "Downloading appimagetool for $APPIMAGETOOL_ARCH..."
+  curl -L -o "$APPIMAGETOOL" "$APPIMAGETOOL_URL"
   chmod +x "$APPIMAGETOOL"
 fi
 
 echo "Running appimagetool to build AppImage..."
 # Set VERSION environment variable for appimagetool
 export VERSION="$VERSION"
+if [ "$HOST_ARCH" != "x86_64" ] && [ -z "${ARCH:-}" ]; then
+  export ARCH="x86_64"
+  echo "Host arch is $HOST_ARCH; forcing ARCH=$ARCH for x86_64 AppImage output."
+fi
 "$APPIMAGETOOL" --no-appstream "$APPDIR"
 
 # Rename the AppImage to include version number
