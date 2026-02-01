@@ -160,21 +160,8 @@ cp -a "$EXTRACT_DIR/usr/bin" "$APPDIR/"
 cp -a "$EXTRACT_DIR/usr/lib" "$APPDIR/"
 cp -a "$EXTRACT_DIR/usr/share/AnycubicSlicerNext/resources" "$APPDIR/"
 
-# Look for bundled runtime in common locations (for glibc compatibility with older systems)
-REFERENCE_RUNTIME=""
-for runtime_path in "$WORKDIR/../squashfs-root/runtime" "$WORKDIR/squashfs-root/runtime" "$EXTRACT_DIR/usr/runtime"; do
-  if [ -d "$runtime_path" ]; then
-    REFERENCE_RUNTIME="$runtime_path"
-    break
-  fi
-done
-
-if [ -n "$REFERENCE_RUNTIME" ]; then
-  echo "Copying bundled runtime from $REFERENCE_RUNTIME for better compatibility..."
-  cp -a "$REFERENCE_RUNTIME" "$APPDIR/"
-else
-  echo "No bundled runtime found, skipping..."
-fi
+# Skip runtime bundling - causes more problems than it solves
+# Bundling glibc/ld-linux is bad practice and breaks Box64
 
 # Also copy the LICENSE if it exists
 if [ -f "$EXTRACT_DIR/usr/LICENSE.txt" ]; then
@@ -261,12 +248,8 @@ cat > "$APPDIR/AppRun" <<'EOF'
 #!/bin/bash
 DIR=$(readlink -f "$0" | xargs dirname)
 
-# Set library path (include runtime if available for glibc compatibility)
-if [ -d "$DIR/runtime" ]; then
-  export LD_LIBRARY_PATH="$DIR/runtime:$DIR/lib:$DIR/bin:$LD_LIBRARY_PATH"
-else
-  export LD_LIBRARY_PATH="$DIR/lib:$DIR/bin:$LD_LIBRARY_PATH"
-fi
+# Set library path for bundled application libraries
+export LD_LIBRARY_PATH="$DIR/lib:$DIR/bin${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 # FIXME: Slicer segfault workarounds (from OrcaSlicer)
 # 1) Slicer will segfault on systems where locale info is not as expected (i.e. Holo-ISO arch-based distro)
@@ -304,16 +287,12 @@ export WEBKIT_DISABLE_COMPOSITING_MODE=1
 
 # Detect Box64 emulation (check for BOX64 env var or if running under box64)
 if [ -n "$BOX64_PATH" ] || [ -n "$BOX64_LOG" ] || grep -qi box64 /proc/self/maps 2>/dev/null; then
-  # Running under Box64 - do NOT use bundled linker, let Box64 handle it
-  # Box64 needs direct execution to properly intercept library loading
+  # Box64 uses its own library path mechanism
+  export BOX64_LD_LIBRARY_PATH="$DIR/lib:$DIR/bin${BOX64_LD_LIBRARY_PATH:+:$BOX64_LD_LIBRARY_PATH}"
   exec "$DIR/bin/AnycubicSlicerNext" "$@"
 else
-  # Native x86_64 execution - use bundled linker if available
-  if [ -f "$DIR/runtime/ld-linux-x86-64.so.2" ]; then
-    exec "$DIR/runtime/ld-linux-x86-64.so.2" --library-path "$LD_LIBRARY_PATH" "$DIR/bin/AnycubicSlicerNext" "$@"
-  else
-    exec "$DIR/bin/AnycubicSlicerNext" "$@"
-  fi
+  # Native x86_64 execution
+  exec "$DIR/bin/AnycubicSlicerNext" "$@"
 fi
 EOF
 chmod +x "$APPDIR/AppRun"
